@@ -13,7 +13,7 @@ with DAG("ml_pipeline",
          schedule_interval="@daily",
          catchup=False) as dag:
     
-    def preproccess_tesk():
+    def preproccess_task():
         df = preprocess.load_data()
         X_train, X_test, y_train, y_test = preprocess.preprocess_data()
         # Save to Xcom
