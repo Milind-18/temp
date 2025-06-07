@@ -3,34 +3,52 @@ from airflow.operators.python import PythonOperator
 from datetime import datetime
 from pipeline import preprocess, train, evaluate
 
-default_args = {"owner": "airflow", "start_date": datetime(2023, 1, 1)}
+default_args = {
+    "owner": "airflow",
+    "start_date": datetime(2024, 1, 1),
+    }
 
-with DAG("ml_pipeline", schedule_intervals="@daily", default_args=default_args, catchup=False) as dag:
-
-    def step_preprocess(ti):
+with DAG("ml_pipeline",
+         default_args=default_args,
+         schedule_intervals="@daily",
+         catchup=False) as dag:
+    
+    def preproccess_tesk():
+        df = preprocess.load_data()
         X_train, X_test, y_train, y_test = preprocess.preprocess_data()
-        ti.xcom_push("X_train", X_train)
-        ti.xcom_push("X_test",X_test)
-        ti.xcom_push("y_train",y_train)
-        ti.xcom_push("y_test",y_test)
+        # Save to Xcom
+        return {
+            "X_train": X_train.to_json(),
+            "X_test": X_test.to_json(),
+            "y_train": y_train.to_json(),
+            "y_test": y_test.to_json()
+        }
 
-    def step_train(ti):
-        X_train = ti.xcom_pull(task_ids="preprocess", key="X_train")
-        y_train = ti.xcom_pull(task_ids="preprocess", key="y_train")
+    def train_task(ti):
+        import pandas as pd
+        data = ti.xcom_pull(task_id="preprocess")
+        X_train = pd.read_json(data["X_train"])
+        X_test = pd.read_json(data["X_test"])
+        y_train = pd.read_json(data["y_train"],typ="series")
+        y_test = pd.read_json(data["y_test"], typ="series")
+
         model = train.train_model(X_train, y_train)
-        ti.xcom_push("model", model)
+        train.evaluate_model(model, X_test, y_test)
+        train.save_model(model)
 
-    def step_evaluate(ti):
-        model = ti.xcom_pull(task_ids="train", key="model")
-        X_test = ti.xcom_pull(task_ids="preprocess", key="X_test")
-        y_test = ti.xcom_pull(task_ids="preprocess", key="y_test")
-        acc = evaluate.evaluate_model(model, X_test, y_test)
-        print(f"Accuracy: {acc}")
+    preprocess_op = PythonOperator(
+        task_id="preprocess",
+        python_callable=preprocess_task
 
-    t1 = PythonOperator(task_id="preprocess", python_callable=step_preprocess)
-    t2 = PythonOperator(task_id="train", python_callable=step_train)
-    t3 = PythonOperator(task_id="evaluate", python_callable=step_evaluate)
+    )
 
-    t1 >> t2 >> t3
+    train_op = PythonOperator(
+        task_id="train",
+        python_callable=train_task
+    )
+
+    preprocess_op >> train_op
+
+
 
 
