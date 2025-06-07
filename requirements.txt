@@ -1,0 +1,5 @@
+pandas
+scikit-learn
+apache-airflow==2.9.0
+pytest
+flake8
