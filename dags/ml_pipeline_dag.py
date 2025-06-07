@@ -10,7 +10,7 @@ default_args = {
 
 with DAG("ml_pipeline",
          default_args=default_args,
-         schedule_intervals="@daily",
+         schedule_interval="@daily",
          catchup=False) as dag:
     
     def preproccess_tesk():
